@@ -152,10 +152,10 @@ function Reset()
 
 function HandleMIDI(event)
 {
-	if (!(event instanceof Note))
-	{
-	Trace( "MIDI INPUT : " + programChangeMemory[ event.number ] );  // Debug incoming event
-	}
+	// if (!(event instanceof Note))
+	// {
+	// 	Trace( "MIDI INPUT : " + event );  // Debug incoming event
+	// }
 
 	// monitor Program change (pattern change)
 	if ( ( listenProgramChange === true ) && ( event instanceof ProgramChange ) && ( event.channel === programChangeChannel ) && ( event.number < 96 ) )
@@ -166,7 +166,7 @@ function HandleMIDI(event)
 			return;
 		}
 
-		SoloStateTrigger =  programChangeMemory[ event.number ];
+		SoloStateTrigger =  programChangeMemory[ event.number ].value;
  
 		// send
 		prepareMIDIupdate( SoloStateTrigger ^ flipMask  ).then( (result) => {
@@ -736,7 +736,7 @@ function ParameterChanged( pParamNumber, pValue )
 	 			
 	 	}
 	 			
-	 	var outGoingCC = new ControlChange;
+	 	var outGoingCC = new ControlChange();
 	 	outGoingCC.channel = settingsCCchannel;
 	 	outGoingCC.number = settingsCC;
 	 	outGoingCC.value = settingsCcValue;
@@ -846,7 +846,7 @@ function SetStartStates( param, value )
 
 	    						newStartMode = true;
 								StartStateOn = false;
-								break;;
+								break;
 								
 							case 1:	// Mutes
 								SoloStateTrigger = SoloStateStartMemoryMute;									
@@ -1082,7 +1082,6 @@ function sendSolosStateToMs( allChannelCCpack )
 		// Trace("SOLO OUT : " + cc + "  solomode :" + soloMode + "  solomodeStart :" + soloModeStart); // debug SOLO's MIDI output
 		cc.send(); 
 	});
-	delete allChannelCCpack;
 }
 
 
