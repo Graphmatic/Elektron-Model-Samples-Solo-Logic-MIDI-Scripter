@@ -13,10 +13,10 @@
 /*  same time: SOLOing a track mutes all other, whatever was theirs previous states.                                
 /*												                                                                   
 /*   TOGGLING MODE is the most intuitive, but STACKED one could allow more creative patterns transitions...        	
-/*											                                                                        
+/*											
 /*	ONLY TESTED USING USB PORT OF MODEL:SAMPLES & MODEL:CYCLES - Strange things may occur using DIN MIDI port with  
 /*	'MIDI THRU' option active. Also the MIDI USB port is pretty faster than DIN MIDI, and as the MUTE events loop
-/*	from and to the M:S and DAW, maybe delay will be perceptible with DIN MIDI...				                                                                    
+/*	from and to the M:S and DAW, maybe delay will be perceptible with DIN MIDI...				
 /*			                                                                                                       	
 /*			                        			HOW TO USE                                                           
 /*	On the Model:Samples/Cycles:
@@ -39,74 +39,97 @@
 
 
 
-	var SoloStateMemory = 0b000000;   			// the local var holding Solos state - it's allow multiple solo-ed tracks at once
-	var SoloStateTrigger = 0b000000;  			// the local var used to update M:S/M:C
+	var SoloStateMemory = 0b000000;   					// the local var holding Solos state - it's allow multiple solo-ed
+																	// tracks at once
+	var SoloStateTrigger = 0b000000;  					// the local var used to update M:S/M:C
 	var SoloStateStartMemory = 0b111111;
 	var SoloStateStartMemoryMute = 0b111111;
 	var SoloStateStartMemoryToggling = 0b111111;
 	var SoloStateStartMemoryStacked = 0b111111;
 	var soloModeStart = 0;
 	var startModeLock = 0;
-	const logical = new Array(1,2,4,8,16,32); 	// an helper array to toggle the resp. bits of SoloState
-	var isInit = true; 							// an helper boolean to detect the first key-press after Solo mode activation
-	const muteCCnumber = 94; 					// the CC that triger MUTE on M:S / M:C
-	const flipMask = 0b111111; 					// another helpfull helper
-	var soloMode = 0;  							// 0 = MUTE  --  1 = TOGGLING  --  2 = STACKED
+	const logical = new Array(1,2,4,8,16,32); 		// an helper array to toggle the resp. bits of SoloState
+	var isInit = true; 										// an helper boolean to detect the first key-press after Solo mode 
+																	// activation
+	const muteCCnumber = 94; 								// the CC that triger MUTE on M:S / M:C
+	const flipMask = 0b111111; 							// another helpfull helper
+	var soloMode = 0;  										// 0 = MUTE  --  1 = TOGGLING  --  2 = STACKED
 	var StartStateOn = false;
 	var refresh = false;
 	var refreshTracksUIBtns = false;
+	const toggleMatrix = [ 0b111111, 0b000001, 0b000010, 0b000100, 0b001000, 0b010000, 0b100000];
 
-	var StatesSend = false;						// If false MUTE/SOLO pads are used to setup the MUTE/SOLO states at sequence start
+	var programChangeMemory = new Array();			// Store Mute/Solo states per pattern
+	let bankArray = new Array("A", "B", "C", "D", "E", "F");
+	for ( var o  =  1; o <= bankArray.length; o++ )
+	{
+		for ( var i = 0; i <= 15; i++ )
+		{
+			let k = "BANK " + bankArray[ o - 1 ] + " - PATTERN " + toString( i + 1 ); 
+			programChangeMemory[ i + ( o * 16 ) ] = { "name" : k, "value" : toggleMatrix[0] };
+		}
+	}
+	var StatesSend = false;									// If false MUTE/SOLO pads are used to setup the MUTE/SOLO states at
+																	// sequence start
 	var isPlaying = false;
 	var modeSelect = false;
 	var newStartMode = false;
-	const toggleMatrix = [ 0b111111, 0b000001, 0b000010, 0b000100, 0b001000, 0b010000, 0b100000];
 	const startPresetNames = ["disabled", "mute", "toggling", "stacked"];
 
-	///////////////////////////////////////// ⬇︎⬇︎⬇︎  - USER EDITABLE VARIABLES - ⬇︎⬇︎⬇︎ /////////////////////////////////////////////////
+	///////////////////////////////////////// ⬇︎⬇︎⬇︎  - USER EDITABLE VARIABLES - ⬇︎⬇︎⬇︎//////////////////////////////////
  
 									/* USER EDITABLE VARIABLES editable from module GUI */
 
-	// no needs to modify them here: do that from module GUI then use "save" option from the contextual menu of the module's GUI (the one
-	// at the top of the module), and your settings will be recalled even if you unload/reload the module or if you load it from another
-	// project.
+	/* no needs to modify them here: do that from module GUI then use "save" option from the contextual menu of the 
+		module's GUI (the one at the top of the module), and your settings will be recalled even if you unload/reload the module or if you load it from another project. */
 
-	var settingsCC = 104;						// the CC used to switch mode : default CC.104 Channel 1 : use the "FADE" 
-	var settingsCCchannel = 1;				// setting of LFO Setup menu of Track 1 on the M:S/M:C =>
-											//  0 = Mute mode 
-											//  1 = Toggling mode
-											//  2 = Stacked mode 
-											// this values on the M:S/M:C screen are respectively responding to CC values 64, 65, 66 but
-											// don't worry: if you choose another CC, simply sends 0,1,2 values. Values are only 
-											// remapped if CC.104 is used. This setting could be changed from module UI
+	var settingsCC = 104;						 // the CC used to switch mode : default CC.104 Channel 1 : use the "FADE" 
+	var settingsCCchannel = 1;				    // setting of LFO Setup menu of Track 1 on the M:S/M:C =>
+														 //  0 = Mute mode 
+														 //  1 = Toggling mode
+														 //  2 = Stacked mode 
+														 // this values on the M:S/M:C screen are respectively responding to CC
+														 // values 64, 65, 66 but don't worry: if you choose another CC, simply sends 
+														 // 0,1,2 values. Values are only remapped if CC.104 is used. This setting 
+														 // could be changed from module UI.
 	
-	var	sendSettingsCCtoMS = true;			// Set to true if you want Logic Scripter UI to send to M:S/M:C (or to the controler you use)
-											// settingsCC value changes, so local tweaks are reflected to M:S/M:C too.		
-											// The "settingsCCchannel" value will be used as MIDI channel.
+	var	sendSettingsCCtoMS = true;			 // Set to true if you want Logic Scripter UI to send to M:S/M:C (or to the 
+														 // controler you use) settingsCC value changes, so local tweaks are 
+														 // reflected to M:S/M:C too.		
+														 // The "settingsCCchannel" value will be used as MIDI channel.
 
 									/* USER EDITABLE VARIABLES that are not editable from module GUI */
 
-	var reScaleSettingsCCvalues = true;			// Set this flag to true if you want to use a wider range of values for switching Solo mode
-	var reScaleMin = 0;							// Set reScaleMin and reScaleMax to the desired range. It's usefull if you use the "FADE" 
-	var reScaleMax = 15;							// setting of LFO Setup menu of Track 1 on the M:S/M:C, as it's not so handly to move the
-												// encoder only one step at once. Note that it could sometime produce some weird behaviour when
-												// sendSettingsCCtoMS flag is set to true too and encoder is twisted too fast.
-												// reScaleMin can not be less than 0 (no negative value).
-												// The remapping function needs the reScaleMax (minus reScaleMin if reScaleMin != 0) to be a
-												// multiple of 3. (i.e. 3, 6, 9, ...).
+	var reScaleSettingsCCvalues = true;		// Set this flag to true if you want to use a wider range of values for 
+														// switching Solo mode
+	var reScaleMin = 0;							// Set reScaleMin and reScaleMax to the desired range. It's usefull if you
+														// use the "FADE" setting of LFO Setup menu of Track 1 on the M:S/M:C, as 
+														// it's not so handly to move the encoder only one step at once. Note that it
+														// could sometime produce some weird behaviour when sendSettingsCCtoMS flag 
+														// is set to true too and encoder is twisted too fast.
+	var reScaleMax = 15;							// reScaleMin can not be less than 0 (no negative value).
+														// The remapping function needs the reScaleMax (minus reScaleMin if 
+														// reScaleMin != 0) to be a multiple of 3. (i.e. 3, 6, 9, ...).
 
-	var limitEncoderRange = true;					// with this flag set to true, the M:S/M:C encoder (ans so M:S/m:C screen values) won't go  
-												// below or above the accepted values for the settings's CC (0 to 2 or reScale range (if set) )
-												// Take care that this function works sending incoming data back to the controler so it increase
-												// MIDI traffic. I suppose it's not a good idea to set this flag if you use DIN MIDI of M:S/M:C
-												// with 'MIDI THRU' set.
+	var limitEncoderRange = true;				// with this flag set to true, the M:S/M:C encoder (ans so M:S/m:C screen
+														// values) won't go below or above the accepted values for the settings's 
+														// CC (0 to 2 or reScale range (if set) )
+														// Take care that this function works sending incoming data back to the 
+														// controler so it increase MIDI traffic. I suppose it's not a good idea to set this flag if you use DIN MIDI of M:S/M:C with 'MIDI THRU' set.
+
+	var listenProgramChange = true;				// Set to false if you don't want to send Mute/Solo states on 
+															//	pattern change
+	var listenProgramChangeOnlyPlay = true;	// Ignore Program change if not currently playing
+	var programChangeChannel = 1;					// Edit to matche M:S/M:C setup
 	
-	///////////////////////////////////////// ⬆︎⬆︎⬆︎ - USER EDITABLE VARIABLES - ⬆︎⬆︎⬆︎ /////////////////////////////////////////////////
+	///////////////////////////////////////// ⬆︎⬆︎⬆︎ - USER EDITABLE VARIABLES - ⬆︎⬆︎⬆︎ //////////////////////////////////
 
 
 
-	ResetParameterDefaults = true;						// ensure that flags states are correctly updated on the GUI when loading module
-	var NeedsTimingInfo = true;								// Define NeedsTimingInfo as true at the global level to enable GetHostInfo()
+	ResetParameterDefaults = true;						// ensure that flags states are correctly updated on the GUI when
+																	// loading module
+	var NeedsTimingInfo = true;							// Define NeedsTimingInfo as true at the global level to enable 
+																	// GetHostInfo()
 
 // Used to detect when play is pressed
 function Reset() 
@@ -129,16 +152,46 @@ function Reset()
 
 function HandleMIDI(event)
 {
-	// if (!(event instanceof Note))
-	// {
-	// Trace( "MIDI INPUT : " + startModeLock );  // Debug incoming event
-	// }
+	if (!(event instanceof Note))
+	{
+	Trace( "MIDI INPUT : " + programChangeMemory[ event.number ] );  // Debug incoming event
+	}
+
+	// monitor Program change (pattern change)
+	if ( ( listenProgramChange === true ) && ( event instanceof ProgramChange ) && ( event.channel === programChangeChannel ) && ( event.number < 96 ) )
+	{
+		// is playing && listenProgramChangeOnlyPlay ?
+		if ( ( listenProgramChangeOnlyPlay === true ) && ( GetTimingInfo().playing === false ) ) 
+		{
+			return;
+		}
+
+		SoloStateTrigger =  programChangeMemory[ event.number ];
+ 
+		// send
+		prepareMIDIupdate( SoloStateTrigger ^ flipMask  ).then( (result) => {
+			sendSolosStateToMs( result );
+			
+			// ...well :-), it's time to save the current SOLOs states to local memory
+			if ( ( SoloStateTrigger !== 0 ) && ( SoloStateTrigger !== flipMask ) && ( soloMode === 2 ) ) 
+			{
+				SoloStateMemory = SoloStateTrigger;
+			}
+			else 
+			{
+				SoloStateMemory = 0;
+			}
+		 });
+
+		return;
+	}
 	
 	// monitor CC which select mode and status
 	if ( ( event instanceof ControlChange ) && ( event.number == settingsCC ) && ( event.channel == settingsCCchannel ) )
 	{
 		
-		// if CC value below or above the needed range: ignore them (that save MIDI traffic) or limit them if limitEncoderRange is set to true.
+		// if CC value below or above the needed range: ignore them (that save MIDI traffic) or limit them if 
+		// limitEncoderRange is set to true.
 		if ( ( ( limitEncoderRange === false ) && ( reScaleSettingsCCvalues === false ) && ( settingsCC === 104 ) && ( ( event.value < 64 ) || ( event.value > 66 ) ) )
 			|| ( ( limitEncoderRange === false ) && ( reScaleSettingsCCvalues === true ) && ( settingsCC === 104 ) && ( ( event.value < ( 64 + reScaleMin ) ) || ( event.value > 64 + reScaleMax ) ) )
 				|| ( ( limitEncoderRange === false ) && ( reScaleSettingsCCvalues === false ) && ( settingsCC !== 104 ) && ( ( event.value < 0 ) || ( event.value > 2 ) ) )
@@ -224,6 +277,8 @@ function HandleMIDI(event)
 				SetParameter( 0, 2 );
 				break;
 		}
+
+		return;
 	}
 
 	// M:S is not playing and Start Mode is not on Disabled == Pads are used to configure the initial states of Mutes/Solos
@@ -233,30 +288,26 @@ function HandleMIDI(event)
 		{
 			event.value = 1;
 		}
-		Trace('***CONFIG*** : startModeLock  ' +  startModeLock  +  ' soloModeStart : ' + soloModeStart );
 		if ( newStartMode ) 
 		{
 			modeSelect = false; 
 			newStartMode = false;
 		}
-		else if ( soloModeStart === 2 )
+		if ( soloModeStart === 2 )
 		{
-			Trace('***CONFIG***else if :' + event.value );
-
 			SetStartStates( event.channel + 6, 1 );
 			return;
 		}
 		else
 		{
-			Trace('***CONFIG***else :' + event.value );
 			SetStartStates( event.channel + 6, event.value);
 			return;
 		}
 		
 	}
 
-	
-	if ( ( event instanceof ControlChange && event.number == muteCCnumber ) && ( soloMode !== 0 ) ) // it's a Mute event and Solo is On
+	// it's a Mute event and Solo is On
+	if ( ( event instanceof ControlChange && event.number == muteCCnumber ) && ( soloMode !== 0 ) ) 
 	{ 
 		// remap MIDI channel value to address correctly zero-starting arrays.
 		var MidiChannel = event.channel - 1;
@@ -848,7 +899,6 @@ function SetStartStates( param, value )
 						// save
 						SoloStateStartMemory = SoloStateTrigger;
 
-						
 						//Update GUI
 						refreshTracksUIBtns = true;
 
