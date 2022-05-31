@@ -43,10 +43,7 @@
 																	// tracks at once
 	var SoloStateTrigger = 0b000000;  					// the local var used to update M:S/M:C
 	var SoloStateStartMemory = 0b111111;
-	var SoloStateStartMemoryMute = 0b111111;
-	var SoloStateStartMemoryToggling = 0b111111;
-	var SoloStateStartMemoryStacked = 0b111111;
-	var soloModeStart = 0;
+	var startPreset = false;
 	var startModeLock = 0;
 	const logical = new Array(1,2,4,8,16,32); 		// an helper array to toggle the resp. bits of SoloState
 	var isInit = true; 										// an helper boolean to detect the first key-press after Solo mode 
@@ -282,7 +279,7 @@ function HandleMIDI(event)
 	}
 
 	// M:S is not playing and Start Mode is not on Disabled == Pads are used to configure the initial states of Mutes/Solos
-	if ( ( event instanceof ControlChange && event.number == muteCCnumber ) && ( !isPlaying ) && ( !startModeLock ) && ( soloModeStart > 0 ))
+	if ( ( event instanceof ControlChange && event.number == muteCCnumber ) && ( !isPlaying ) && ( !startModeLock ) && ( startPreset ) )
 	{
 		if ( event.value > 1 ) 
 		{
@@ -293,16 +290,9 @@ function HandleMIDI(event)
 			modeSelect = false; 
 			newStartMode = false;
 		}
-		if ( soloModeStart === 2 )
-		{
-			SetStartStates( event.channel + 6, 1 );
-			return;
-		}
-		else
-		{
-			SetStartStates( event.channel + 6, event.value);
-			return;
-		}
+			
+		SetStartStates( event.channel + 6, event.value);
+		return;
 		
 	}
 
@@ -449,10 +439,10 @@ var PluginParameters =
 		{
  			name:"Preset",   // select Mute mode or Stacked or Toggling SOLO mode  ------ 6
  			type:"menu",
- 			valueStrings:["disabled", "Mute", "Toggling", "Stacked"],
+ 			valueStrings:["disabled", "enabled"],
  			defaultValue:0,
  			minValue:0, 
- 			maxValue:3,
+ 			maxValue:1,
  			disableAutomation: false,
 			readOnly: false	
 		},
@@ -643,20 +633,10 @@ function ParameterChanged( pParamNumber, pValue )
 			{
 				if ( ( startModeLock === 0 ) && ( !refresh ) )
 				{
-					soloModeStart = pValue;
-					soloMode = soloModeStart - 1;
-					if ( soloMode < 0 ) 
-					{
-						soloMode = 0;
-					}
 					SetStartStates(pParamNumber, pValue);
 					break;
 				}
-				if ( startModeLock === 1 ) 
-				{
-					SetStartStates(pParamNumber, soloModeStart);
-					break;
-				}
+				
 			}
 			break;
 
@@ -683,7 +663,7 @@ function ParameterChanged( pParamNumber, pValue )
 					if ( !refresh && startModeLock == 0 ) 
 					{
 					startModeLock = 1;
-					SetParameter( 0, soloModeStart );
+					
 					SetStartStates(pParamNumber, pValue);
 					break;
 					}
@@ -799,27 +779,22 @@ function SetStartStates( param, value )
 		switch( param )
 				{
 					case 6:
-						soloModeStart = value;
 						
-						switch( soloModeStart )
+						switch( value )
 						{
 							case 0:
+								startPreset = false;
 								SoloStateTrigger = 0b111111;
 								// save
 								SoloStateStartMemory = SoloStateTrigger;
-								 newStartMode = true;
 								break;
 
 							case 1:
-								SoloStateTrigger = SoloStateStartMemoryMute;
+								startPreset = true;
+								SoloStateTrigger = SoloStateStartMemory;
 								break;
 
-							case 2:
-								SoloStateTrigger = SoloStateStartMemoryToggling;
-								break;
-
-							case 3:
-								SoloStateTrigger = SoloStateStartMemoryStacked;
+							default:
 								break;
 
 						}
@@ -836,75 +811,28 @@ function SetStartStates( param, value )
 					case 10:
 					case 11:
 					case 12:
-						switch( soloModeStart )
+						if ( !startPreset )
 						{
-							case 0:
 								modeSelect = true;
 								SoloStateTrigger = 0b111111;
 
-								refreshTracksUIBtns = true;
 
 	    						newStartMode = true;
 								StartStateOn = false;
-								break;
-								
-							case 1:	// Mutes
-								SoloStateTrigger = SoloStateStartMemoryMute;									
-								SoloStateTrigger = SoloStateTrigger ^ ( 1 << ( param - 7 ) );
-								SoloStateStartMemoryMute = SoloStateTrigger;
-								StartStateOn = true;
-								newStartMode = true;
-								break;
-
-							case 2:  // TOGGLING
-								var evalPreviousState = SoloStateTrigger ^ logical[ param - 7 ]; 
-								if ( evalPreviousState === 0 ) // a solo is unsoloed
-								{
-									SoloStateTrigger = toggleMatrix[ 0 ];  // so all to one
-								}
-								else 							
-								{
-									SoloStateTrigger = toggleMatrix[ param - 6 ];
-								}
-								SoloStateStartMemoryToggling = SoloStateTrigger;
-								newStartMode = true;
-								StartStateOn = true;
-								break;
-
-							case 3:  // STACKED
-								if ( SoloStateMemory === 0b000000 )
-								{
-									SoloStateMemory |= ( 1 << ( param - 7 ) );
-								}
-								else
-								{
-									SoloStateMemory = SoloStateMemory ^ ( 1 << ( param - 7 ) );
-								}
-
-								SoloStateTrigger = SoloStateMemory;
-								SoloStateStartMemoryStacked = SoloStateMemory;
-
-								if ( SoloStateTrigger === 0b000000 )
-								{
-									SoloStateTrigger = 0b111111;
-								}
-								newStartMode = true;
-								StartStateOn = true;							
-								break;
-
-							default:
-								break;
 						}
-
-						// save
-						SoloStateStartMemory = SoloStateTrigger;
-
+						else 
+						{
+								SoloStateTrigger = SoloStateStartMemory;									
+								SoloStateTrigger = SoloStateTrigger ^ ( 1 << ( param - 7 ) );
+								// save
+								SoloStateStartMemory = SoloStateTrigger;
+								StartStateOn = true;
+								newStartMode = true;
+						}
+						
 						//Update GUI
 						refreshTracksUIBtns = true;
 
-						break;
-
-						default:
 						break;
 				}
 
@@ -917,9 +845,14 @@ function SetStartStates( param, value )
 		startModeLock = 1;
 		Trace("SoloStateTrigger  PluginParameters : " + SoloStateTrigger );
 		SoloStateTrigger = SoloStateStartMemory;
+		let txt = "Disabled";
+		if ( startPreset )
+		{
+			txt = "Enabled";
+		}
 		PluginParameters[6] = 
 		{
- 			name: "Preset : " + startPresetNames[soloModeStart],   // select Mute mode or Stacked or Toggling SOLO mode  ------ 6
+ 			name: "Start Preset " + txt,
  			type:"text",
  			disableAutomation: false,
 			readOnly: false	
@@ -965,12 +898,12 @@ function SetStartStates( param, value )
 	
 		PluginParameters[6] = 
 		{
- 			name:"Preset",   // select Mute mode or Stacked or Toggling SOLO mode  ------ 6
+ 			name:"Preset",   //   ------ 6
  			type:"menu",
- 			valueStrings:["disabled", "Mute", "Toggling", "Stacked"],
- 			defaultValue:soloModeStart,
+ 			valueStrings:["disabled", "Enabled"],
+ 			defaultValue:1,
  			minValue:0, 
- 			maxValue:3,
+ 			maxValue:1,
  			disableAutomation: false,
 			readOnly: false	
 		};
