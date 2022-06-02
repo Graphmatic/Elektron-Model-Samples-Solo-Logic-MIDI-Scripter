@@ -64,11 +64,12 @@
 	{
 		for ( var i = 0; i <= 15; i++ )
 		{
-			var k = "BANK " + bankArray[ o - 1 ] + " - PATTERN " + (i + 1); 
+			var k = bankArray[ o - 1 ] + " - P " + (i + 1); 
 			programChangeMemory[ i + ( (o - 1) * 16 ) ] = false;
 			programChangeMemoryName[(i + ( o * 16 )) + 1] = k;
 		}
 	}
+	var lastProgramChangeMemory = 0;
 	var StatesSend = false;									// If false MUTE/SOLO pads are used to setup the MUTE/SOLO states at
 																	// sequence start
 	var isPlaying = false;
@@ -375,21 +376,23 @@ function HandleMIDI(event)
 	}
 }
 
-// the array containing GUI controls
-var PluginParameters = 
-	[
+function builPluginParameters()
+{
+	var ar = new Array();
+
+	ar = [
 		{
  			name:"mode",   // select Mute, Stacked or Toggling SOLO mode  ------ 0
  			type:"menu",
  			valueStrings:["Mute", "Toggling", "Stacked"],
- 			defaultValue:0,
+ 			defaultValue: soloMode,
  			minValue:0, 
  			maxValue:2,
  			disableAutomation: false,
 			readOnly: false	
 		},
 		{
-			name:"Settings",		
+			name:"                              ⚙️",		
 			type:"text",
 			disableAutomation: true,
 			readOnly: true
@@ -421,17 +424,17 @@ var PluginParameters =
 			readOnly: false
     	},
 		{
-			name:"Start Preset",    //  ------------ 5
+			name:"                              🔒",    //  ------------ 5
 			type:"text",
 			hidden: false,
 			disableAutomation: true,
 			readOnly: true
 		},
 		{
- 			name:"Lock On Play",   // select Mute mode or Stacked or Toggling SOLO mode  ------ 6
+ 			name:"Lock On Play",   // select Mute sent at play  ------ 6
  			type:"menu",
  			valueStrings:["disabled", "enabled"],
- 			defaultValue:0,
+ 			defaultValue: startPreset === true ? 1 : 0,
  			minValue:0, 
  			maxValue:1,
  			disableAutomation: false,
@@ -534,7 +537,7 @@ var PluginParameters =
 			readOnly: true
     	},
     	{
-			name:"[FUNC] + PADs to set your selection", //  ------------ 19
+			name:"                               💾", //  ------------ 19
 			type:"text",
 			disableAutomation: false,
 			readOnly: true
@@ -542,8 +545,8 @@ var PluginParameters =
 		{
  			name:"Lock On Pattern",   //  ------ 20
  			type:"menu",
- 			valueStrings:programChangeMemoryName,
- 			defaultValue:0,
+ 			valueStrings: programChangeMemoryName,
+ 			defaultValue:lastProgramChangeMemory,
  			minValue:0, 
  			maxValue:96,
  			hidden: false,
@@ -559,14 +562,24 @@ var PluginParameters =
 
 	];
 
+return ar
+}
 
+
+// the array containing GUI controls
+var PluginParameters = builPluginParameters();
+	
 
 
 
 // Update settings from module UI or via CC
 function ParameterChanged( pParamNumber, pValue ) 
 {
-Trace('is refresh ?  : ' + refresh);
+	Trace ("p :" + pParamNumber + "   " + pValue);
+	if ( !refreshPatternMenu ) 
+	{
+
+
 	var nop = false;
 	switch ( pParamNumber )
 	{
@@ -641,7 +654,7 @@ Trace('is refresh ?  : ' + refresh);
 			break;
 
 		case 20:
-			if ( !isPlaying && !refresh ) 
+			if ( !isPlaying && !refresh && startPreset ) 
 			{
 				programChangeMemory[ pValue - 1 ] = SoloStateStartMemory;
 
@@ -655,7 +668,7 @@ Trace('is refresh ?  : ' + refresh);
 	}
 
 
-	if ( !nop && pParamNumber === 0 && sendSettingsCCtoMS ) // Call from UI, must update M:S CC
+	if ( !nop && ( pParamNumber === 0 ) && sendSettingsCCtoMS ) // Call from UI, must update M:S CC
 	{	
 	 	var settingsCcValue = pValue;
 
@@ -687,6 +700,10 @@ Trace('is refresh ?  : ' + refresh);
 	 	outGoingCC.send();
 			
 	}
+}
+else {
+	refreshPatternMenu = false;
+}
 }
 
 
@@ -739,9 +756,7 @@ function SetStartStates( param, value )
 							case 0:
 								startPreset = false;
 								SoloStateTrigger = 0b111111;
-								// save
-								//SoloStateStartMemory = SoloStateTrigger;
-
+								SetParameter( 20, 0 );
 								break;
 
 							case 1:
@@ -791,7 +806,7 @@ function SetStartStates( param, value )
 						break;
 
 					case 20:
-						if ( !refreshPatternMenu )
+						if ( !refreshPatternMenu && value !== lastProgramChangeMemory )
 						{
 							programChangeMemoryName[0] = "Select...";
 	
@@ -799,10 +814,10 @@ function SetStartStates( param, value )
 							{
 								for ( var i = 0; i <= 15; i++ )
 								{
-									var k = "B " + bankArray[ o - 1 ] + " - P " + (i + 1);       
+									var k = bankArray[ o - 1 ] + " - P " + (i + 1);       
 									if ( programChangeMemory[ i + ( (o - 1) * 16 ) ] !== false )    // special char : ⚈ ⚆
 									{																					 // ☀︎ ☼  ⊙ ⊙  ☒ ☐  ◉ 
-										k += "   ";															    // ● ◯ ◯  ◉ ◯
+										k += "  ";															       // ● ◯ ◯  ◉ ◯
 										bitExtracted(programChangeMemory[ i + ( (o - 1) * 16 ) ], 1) === 1 ? k += "⬜️  " : k += "🔳  ";
 										bitExtracted(programChangeMemory[ i + ( (o - 1) * 16 ) ], 2) === 1 ? k += "⬜️  " : k += "🔳  ";
 										bitExtracted(programChangeMemory[ i + ( (o - 1) * 16 ) ], 3) === 1 ? k += "⬜️  " : k += "🔳  ";
@@ -812,20 +827,24 @@ function SetStartStates( param, value )
 									} 
 									programChangeMemoryName[(i + ( o * 16 )) + 1] = k;								}
 							}
-	
-							PluginParameters[20] = {
- 								name:"Lock On Pattern",   //  ------ 20
- 								type:"menu",
- 								valueStrings:programChangeMemoryName,
- 								defaultValue:value,
- 								minValue:0, 
- 								maxValue:96,
- 								hidden: false,
- 								disableAutomation: false,
-								readOnly: false	
-							}
+							
+							lastProgramChangeMemory = value;
+							// PluginParameters[20] = {
+ 						// 		name:"Lock On Pattern",   //  ------ 20
+ 						// 		type:"menu",
+ 						// 		valueStrings:programChangeMemoryName,
+ 						// 		defaultValue:value,
+ 						// 		minValue:0, 
+ 						// 		maxValue:96,
+ 						// 		hidden: false,
+ 						// 		disableAutomation: false,
+							// 	readOnly: false	
+							// }
+							
+							// UpdatePluginParameters();			
+							// ParameterChanged( 0, 2 );
 							refreshPatternMenu = true;
-							UpdatePluginParameters();			
+
 						}
 						else
 						{
@@ -841,7 +860,7 @@ function SetStartStates( param, value )
 
 		if ( newStartMode  )  // Update M:S 
 	{
-		Trace("SoloStateTrigger  prepareMIDIupdateMute : " + SoloStateTrigger );
+		//Trace("SoloStateTrigger  prepareMIDIupdateMute : " + SoloStateTrigger );
 		prepareMIDIupdate( SoloStateTrigger ^ flipMask  ).then((result) => { // last masking to revert value back to what M:S/M:C needs
 						// ...and send them when they are ready to...
 						sendSolosStateToMs( result );
@@ -857,10 +876,13 @@ function SetStartStates( param, value )
 // triggered when scripter have nothing else to do
 function Idle() 
 {
-		if ( refresh )
+		if ( refresh || refreshPatternMenu )
 		{
+			PluginParameters = builPluginParameters();
 			UpdatePluginParameters();			
 			refresh = false;
+			//refreshPatternMenu = false;
+			
 		}
 
 		if ( refreshTracksUIBtns )
