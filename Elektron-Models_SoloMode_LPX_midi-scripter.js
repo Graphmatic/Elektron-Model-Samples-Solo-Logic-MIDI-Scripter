@@ -38,43 +38,40 @@
 /*******************************************************NOPS©**********************************************************/
 
 
-
 	var SoloStateMemory = 0b000000;   					// the local var holding Solos state - it's allow multiple solo-ed
 																	// tracks at once
 	var SoloStateTrigger = 0b000000;  					// the local var used to update M:S/M:C
-	var SoloStateStartMemory = 0b111111;
+	var SoloStateStartMemory = 0b000000;
 	var startPreset = false;
-	var startModeLock = 0;
-	const logical = new Array(1,2,4,8,16,32); 		// an helper array to toggle the resp. bits of SoloState
+	var logical = new Array(1,2,4,8,16,32); 		// an helper array to toggle the resp. bits of SoloState
 	var isInit = true; 										// an helper boolean to detect the first key-press after Solo mode 
 																	// activation
-	const muteCCnumber = 94; 								// the CC that triger MUTE on M:S / M:C
-	const flipMask = 0b111111; 							// another helpfull helper
+	var muteCCnumber = 94; 								// the CC that triger MUTE on M:S / M:C
+	var flipMask = 0b111111; 							// another helpfull helper
 	var soloMode = 0;  										// 0 = MUTE  --  1 = TOGGLING  --  2 = STACKED
-	var StartStateOn = false;
-	var refresh = false;
 	var refreshTracksUIBtns = false;
-	const toggleMatrix = [ 0b111111, 0b000001, 0b000010, 0b000100, 0b001000, 0b010000, 0b100000];
+	var toggleMatrix = [ 0b111111, 0b000001, 0b000010, 0b000100, 0b001000, 0b010000, 0b100000];
 	var refreshPatternMenu = false;
-	var programChangeMemory = [];			// Store Mute/Solo states per pattern
-	var programChangeMemoryName = [];
-	programChangeMemoryName[0] = "Select...";
-	var bankArray = new Array("A", "B", "C", "D", "E", "F");
-	for ( var o  =  1; o <= bankArray.length; o++ )
+	var startPresetMenuString = "";
+	var lastSavedValues = [];
+	var refreshPlayMenu = false;
+	var startPresetMenuString = "    ";
+	for ( xo = 1; xo <= 6; xo++ )
 	{
-		for ( var i = 0; i <= 15; i++ )
-		{
-			var k = bankArray[ o - 1 ] + " - P " + (i + 1); 
-			programChangeMemory[ i + ( (o - 1) * 16 ) ] = false;
-			programChangeMemoryName[(i + ( o * 16 )) + 1] = k;
-		}
+		startPresetMenuString += bitExtracted(SoloStateTrigger, xo) === 1 ? "⬜️   " : "🔳   ";
 	}
+	var startPresetEdit = 0;
+	var programChangeMemory = [];			// Store Mute/Solo states per pattern   
+	var programChangeMemoryName = [];
+	var bankArray = new Array("A", "B", "C", "D", "E", "F");
+
 	var lastProgramChangeMemory = 0;
 	var StatesSend = false;									// If false MUTE/SOLO pads are used to setup the MUTE/SOLO states at
 																	// sequence start
 	var isPlaying = false;
-	var modeSelect = false;
 	var newStartMode = false;
+	
+	var deletePatternPreset = false;
 
 	///////////////////////////////////////// ⬇︎⬇︎⬇︎  - USER EDITABLE VARIABLES - ⬇︎⬇︎⬇︎//////////////////////////////////
  
@@ -108,14 +105,16 @@
 														// could sometime produce some weird behaviour when sendSettingsCCtoMS flag 
 														// is set to true too and encoder is twisted too fast.
 	var reScaleMax = 15;							// reScaleMin can not be less than 0 (no negative value).
+														//  						*** IMPORTANT !!! ***
 														// The remapping function needs the reScaleMax (minus reScaleMin if 
 														// reScaleMin != 0) to be a multiple of 3. (i.e. 3, 6, 9, ...).
 
-	var limitEncoderRange = true;				// with this flag set to true, the M:S/M:C encoder (ans so M:S/m:C screen
+	var limitEncoderRange = true;				// with this flag set to true, the M:S/M:C encoder (and so M:S/m:C screen
 														// values) won't go below or above the accepted values for the settings's 
 														// CC (0 to 2 or reScale range (if set) )
 														// Take care that this function works sending incoming data back to the 
-														// controler so it increase MIDI traffic. I suppose it's not a good idea to set this flag if you use DIN MIDI of M:S/M:C with 'MIDI THRU' set.
+														// controler so it increase MIDI traffic. I suppose it's not a good idea to 
+														// set this flag if you use DIN MIDI of M:S/M:C with 'MIDI THRU' set.
 
 	var listenProgramChange = true;				// Set to false if you don't want to send Mute/Solo states on 
 															//	pattern change
@@ -131,12 +130,132 @@
 	var NeedsTimingInfo = true;							// Define NeedsTimingInfo as true at the global level to enable 
 																	// GetHostInfo()
 
+function builPluginParameters()
+{
+	var ar = new Array();
+
+	ar = [
+		{
+ 			name:"mode",   // select Mute, Stacked or Toggling SOLO mode  ------ 0
+ 			type:"menu",
+ 			valueStrings:["Mute", "Toggling", "Stacked"],
+ 			defaultValue: soloMode,
+ 			minValue:0, 
+ 			maxValue:2,
+ 			disableAutomation: false,
+			readOnly: false	
+		},
+		{
+			name:"                              ⚙️",		
+			type:"text",
+			disableAutomation: true,
+			readOnly: true
+		},
+ 		{
+ 			name:"mode CC",  // select CC toggling mode  ------ 2
+ 			type:"menu",
+ 			valueStrings: MIDI._ccNames,
+ 			defaultValue: settingsCC,
+ 			disableAutomation: false,
+			readOnly: false
+ 		},
+ 		{
+ 			name:"mode CC chan.",  // select channel of CC toggling mode  ------ 3
+ 			type:"linear", 
+			minValue:1, 
+			maxValue:16, 
+			numberOfSteps:15, 
+			defaultValue:settingsCCchannel,
+ 			disableAutomation: false,
+			readOnly: false,
+			data: 14
+ 		},
+ 		{
+      	name: "CC out",			//  ------------ 4
+      	type: "checkbox",
+      	defaultValue: sendSettingsCCtoMS === true ? 1 : 0,
+      	disableAutomation: false,
+			readOnly: false
+    	},
+		{
+			name:"                              🔒",    //  ------------ 5
+			type:"text",
+			hidden: false,
+			disableAutomation: true,
+			readOnly: true
+		},
+		{
+ 			name:"Lock On Play",   // select Mute sent at play  ------ 6
+ 			type:"menu",
+ 			valueStrings:["disabled", "enabled"],
+ 			defaultValue: startPreset === true ? 1 : 0,
+ 			minValue:0, 
+ 			maxValue:1,
+ 			disableAutomation: false,
+			readOnly: false	
+		},
+		{
+			name: "Edit",			//  ------------ 7 EDIT CHECKBOX
+      	type: "checkbox",
+      	defaultValue: startPresetEdit,
+      	disableAutomation: true,
+			readOnly: false
+		},
+		{
+ 			name: startPresetMenuString,   // select Mute sent at play  ------ 8
+ 			type:"text",
+			disableAutomation: false,
+			readOnly: true
+		},
+    	{
+			name:"                               💾", //  ------------ 9
+			type:"text",
+			disableAutomation: false,
+			readOnly: true
+		},
+		{
+ 			name:"Lock On Pattern",   //  ------ 10 Lock On Pattern
+ 			type:"menu",
+ 			valueStrings: programChangeMemoryName,
+ 			defaultValue:lastProgramChangeMemory,
+ 			minValue:0, 
+ 			maxValue:96,
+ 			hidden: false,
+ 			disableAutomation: false,
+			readOnly: false	
+		},
+		{
+			name: "Delete",			//  ------------ 11 delete Lock On Pattern
+      	type: "checkbox",
+      	defaultValue: deletePatternPreset === true ? 1 : 0,
+      	disableAutomation: true,
+			readOnly: false
+		},
+    	{
+			name:"Info & add. settings: see script header",  //  ------------ 12
+			type:"text",
+			disableAutomation: true,
+			readOnly: true
+		}
+
+	];
+
+	// clone value to compare when ParameterChanged is called
+	ar.forEach(function (v, i) 
+	{
+		lastSavedValues[i] = GetParameter(i) || 0;
+	});
+
+	return ar
+}
+
+
+// the array containing GUI controls
+var PluginParameters = builPluginParameters();
+
 // Used to detect when play is pressed
 function Reset() 
 {
-
-   SetParameter( 20, 1);
-
 }
 
 
@@ -144,13 +263,29 @@ function HandleMIDI(event)
 {
 	// if (!(event instanceof Note))
 	// {
-	// 	Trace( "MIDI INPUT : " + event );  // Debug incoming event
+	//Trace( "MIDI INPUT : " + settingsCC );  // Debug incoming event
 	// }
 	// monitor Program change (pattern change)
 	if ( ( listenProgramChange === true ) && ( event instanceof ProgramChange ) && ( event.channel === programChangeChannel ) && ( event.number < 96 ) )
 	{
-		// is playing && listenProgramChangeOnlyPlay ?
-		if ( ( listenProgramChangeOnlyPlay === true ) && ( GetTimingInfo().playing === false ) || ( programChangeMemory[ event.number ] === false ) ) 
+	
+		// While Edit is checked, get current pattern number (program change) if the [STOP] button is 
+		// pressed twice or if any other pattern is selected, and assign start preset if not set ...
+		if ( startPresetEdit && ( programChangeMemory[ event.number ] === false ) )
+		{
+			programChangeMemory[ event.number ] = SoloStateStartMemory;
+			SetStartStates(10, ( event.number + 1 ) );
+			return;
+		}
+		// ... or delete it if set
+		if ( startPresetEdit && ( programChangeMemory[ event.number ] !== false ) )
+		{
+			programChangeMemory[ event.number ] = false;
+			SetStartStates(10, ( event.number + 1 ) );
+			return;
+		}
+		// is playing && listenProgramChangeOnlyPlay && something is saved for this pattern?
+		if ( ( ( listenProgramChangeOnlyPlay === true ) && ( GetTimingInfo().playing === false ) ) || ( programChangeMemory[ event.number ] === false ) ) 
 		{
 			return;
 		}
@@ -166,7 +301,7 @@ function HandleMIDI(event)
 			{
 				SoloStateMemory = SoloStateTrigger;
 			}
-			else 
+			else
 			{
 				SoloStateMemory = 0;
 			}
@@ -270,26 +405,21 @@ function HandleMIDI(event)
 		return;
 	}
 
-	// M:S is not playing and Start Mode is not on Disabled == Pads are used to configure the initial states of Mutes/Solos
-	if ( ( event instanceof ControlChange && event.number == muteCCnumber ) && ( !isPlaying ) && ( startPreset ) )
+	// M:S is not playing and Edit is checked for sart preset == Pads are used to configure the initial states of Mutes/Solos
+	if (  ( !isPlaying ) && ( startPresetEdit === 1 ) && ( event instanceof ControlChange && event.number == muteCCnumber ) )
 	{
 		if ( event.value > 1 ) 
 		{
 			event.value = 1;
 		}
-		if ( newStartMode ) 
-		{
-			modeSelect = false; 
-			newStartMode = false;
-		}
 			
-		SetStartStates( event.channel + 6, event.value);
+		SetStartStates( event.channel + 20, event.value);
 		return;
 		
 	}
 
 	// it's a Mute event and Solo is On
-	if ( ( event instanceof ControlChange && event.number == muteCCnumber ) && ( soloMode !== 0 ) ) 
+	if ( ( event instanceof ControlChange && event.number == muteCCnumber ) && ( soloMode !== 0 ) && ( startPresetEdit === 0 ) )
 	{ 
 		// remap MIDI channel value to address correctly zero-starting arrays.
 		var MidiChannel = event.channel - 1;
@@ -376,337 +506,6 @@ function HandleMIDI(event)
 	}
 }
 
-function builPluginParameters()
-{
-	var ar = new Array();
-
-	ar = [
-		{
- 			name:"mode",   // select Mute, Stacked or Toggling SOLO mode  ------ 0
- 			type:"menu",
- 			valueStrings:["Mute", "Toggling", "Stacked"],
- 			defaultValue: soloMode,
- 			minValue:0, 
- 			maxValue:2,
- 			disableAutomation: false,
-			readOnly: false	
-		},
-		{
-			name:"                              ⚙️",		
-			type:"text",
-			disableAutomation: true,
-			readOnly: true
-		},
- 		{
- 			name:"mode CC",  // select CC toggling mode  ------ 2
- 			type:"menu",
- 			valueStrings: MIDI._ccNames,
- 			defaultValue: settingsCC,
- 			disableAutomation: false,
-			readOnly: false
- 		},
- 		{
- 			name:"mode CC chan.",  // select channel of CC toggling mode  ------ 3
- 			type:"linear", 
-			minValue:1, 
-			maxValue:16, 
-			numberOfSteps:15, 
-			defaultValue:settingsCCchannel,
- 			disableAutomation: false,
-			readOnly: false,
-			data: 14
- 		},
- 		{
-      	name: "CC out",			//  ------------ 4
-      	type: "checkbox",
-      	defaultValue: sendSettingsCCtoMS === true ? 1 : 0,
-      	disableAutomation: false,
-			readOnly: false
-    	},
-		{
-			name:"                              🔒",    //  ------------ 5
-			type:"text",
-			hidden: false,
-			disableAutomation: true,
-			readOnly: true
-		},
-		{
- 			name:"Lock On Play",   // select Mute sent at play  ------ 6
- 			type:"menu",
- 			valueStrings:["disabled", "enabled"],
- 			defaultValue: startPreset === true ? 1 : 0,
- 			minValue:0, 
- 			maxValue:1,
- 			disableAutomation: false,
-			readOnly: false	
-		},
-		{
-      	name: "TRACK 1", 		//  ------------ 7
-      	type: "checkbox",
-      	defaultValue: 1,
-      	hidden: false,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 2", 		//  ------------ 8
-      	type: "checkbox",
-      	defaultValue: 1,
-      	hidden: false,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 3", 		//  ------------ 9
-      	type: "checkbox",
-      	defaultValue: 1,
-      	hidden: false,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 4", 		//  ------------ 10
-      	type: "checkbox",
-      	defaultValue: 1,
-      	hidden: false,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 5", 		//  ------------ 11
-      	type: "checkbox",
-      	defaultValue: 1,
-      	hidden: false,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 6", 		//  ------------ 12
-      	type: "checkbox",
-      	defaultValue: 1,
-      	hidden: false,
-      	disableAutomation: false,
-			readOnly: true,
-    	},
-    	{
-      	name: "TRACK 1 : ", 		//  ------------ 13
-      	type: "checkbox",
-      	defaultValue: bitExtracted( SoloStateStartMemory, 1 ),
-      	hidden: true,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 2 : ", 		//  ------------ 14
-      	type: "checkbox",
-      	defaultValue: bitExtracted( SoloStateStartMemory, 2 ),
-      	hidden: true,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 3 : ", 		//  ------------ 15
-      	type: "checkbox",
-      	defaultValue: bitExtracted( SoloStateStartMemory, 3 ),
-      	hidden: true,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 4 : ", 		//  ------------ 16
-      	type: "checkbox",
-      	defaultValue: bitExtracted( SoloStateStartMemory, 4 ),
-      	hidden: true,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 5 : ", 		//  ------------ 17
-      	type: "checkbox",
-      	defaultValue: bitExtracted( SoloStateStartMemory, 5 ),
-      	hidden: true,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-		{
-      	name: "TRACK 6 : ", 		//  ------------ 18
-      	type: "checkbox",
-      	defaultValue: bitExtracted( SoloStateStartMemory, 6 ),
-      	hidden: true,
-      	disableAutomation: false,
-			readOnly: true
-    	},
-    	{
-			name:"                               💾", //  ------------ 19
-			type:"text",
-			disableAutomation: false,
-			readOnly: true
-		},
-		{
- 			name:"Lock On Pattern",   //  ------ 20
- 			type:"menu",
- 			valueStrings: programChangeMemoryName,
- 			defaultValue:lastProgramChangeMemory,
- 			minValue:0, 
- 			maxValue:96,
- 			hidden: false,
- 			disableAutomation: false,
-			readOnly: false	
-		},
-    	{
-			name:"Info & add. settings: see script header",  //  ------------ 23
-			type:"text",
-			disableAutomation: true,
-			readOnly: true
-		}
-
-	];
-
-return ar
-}
-
-
-// the array containing GUI controls
-var PluginParameters = builPluginParameters();
-	
-
-
-
-// Update settings from module UI or via CC
-function ParameterChanged( pParamNumber, pValue ) 
-{
-	Trace ("p :" + pParamNumber + "   " + pValue);
-	if ( !refreshPatternMenu ) 
-	{
-
-
-	var nop = false;
-	switch ( pParamNumber )
-	{
-		
-		case 0: 								// SOLO mode selector
-			if ( !refresh )
-			{
-
-				switch ( pValue )
-				{
-					case 0 :
-							soloMode = 0;
-						break;
-
-					case 1 :
-						soloMode = 1;
-						SoloStateTrigger = 0b000000;  // ensure we don't get some résiduel solos from stacked mode
-						SoloStateMemory = 0b000000;
-						break;
-
-					case 2 :
-						soloMode = 2;
-						break;			
-		   	 }
-		    }
-		    break;	
-
-		case 2: 						// SOLO mode selector CC number
-			if ( !refresh )
-			{
-				settingsCC = pValue;
-			}
-			nop = true;
-			break;
-
-		case 3: 						// SOLO mode selector CC channel
-			if ( !refresh )
-			{
-				settingsCCchannel = pValue;
-			}
-			nop = true;
-			break;
-
-		case 4: 						// toggle sendSettingsCCtoMS on/off	
-			if ( !refresh )
-			{	
-				pValue === 1 ? sendSettingsCCtoMS = true : sendSettingsCCtoMS = false;
-			}
-			break;
-
-		case 6:
-			nop = true;
-			if ( !isPlaying && !refresh ) 
-			{
-					SetStartStates(pParamNumber, pValue);
-			}
-			break;
-
-		case 7:
-		case 8:
-		case 9:
-		case 10:
-		case 11:
-		case 12:
-		case 13:
-		case 14:
-		case 15:
-		case 16:
-		case 17:
-		case 18:
-			nop = true;
-			break;
-
-		case 20:
-			if ( !isPlaying && !refresh && startPreset ) 
-			{
-				programChangeMemory[ pValue - 1 ] = SoloStateStartMemory;
-
-				SetStartStates(pParamNumber, pValue);
-			}
-			break;
-
-		default:
-		   nop = true;
-		   break;
-	}
-
-
-	if ( !nop && ( pParamNumber === 0 ) && sendSettingsCCtoMS ) // Call from UI, must update M:S CC
-	{	
-	 	var settingsCcValue = pValue;
-
-	 	if ( reScaleSettingsCCvalues === true )
-		{
-
-			settingsCcValue = settingsCcValue.ScaleValue(0, 3, reScaleMin, reScaleMax);
-			// when CC value step down to the range resp. to the lower value, it jump to the lowest value of this range
-			// so when it happen we add (reScaleMax / 3)- 1
-			if ( settingsCcValue <= ( ( GetParameter(pParamNumber) + ( reScaleMax - reScaleMin ) / 3 ) ) ) 
-			{
-				settingsCcValue += ( ( ( reScaleMax - reScaleMin ) / 3 ) - ( Math.floor( ( ( ( reScaleMax - reScaleMin ) / 3 ) / 2 ) ) ) );
-			}
-
-		}
-	 			
-	 	if ( settingsCC === 104 ) 
-	 	{
-	 	
-	 		settingsCcValue += 64;  // remap value if the "FADE" setting of LFO Setup menu of Track 1 on the M:S/M:C
-	 			
-	 	}
-	 			
-	 	var outGoingCC = new ControlChange();
-	 	outGoingCC.channel = settingsCCchannel;
-	 	outGoingCC.number = settingsCC;
-	 	outGoingCC.value = settingsCcValue;
-	 	Trace( "outGoingCC : " + outGoingCC.value + " pValue : " + pValue );
-	 	outGoingCC.send();
-			
-	}
-}
-else {
-	refreshPatternMenu = false;
-}
-}
-
-
 function ProcessMIDI() {
 
 	var info = GetTimingInfo();  
@@ -715,14 +514,21 @@ function ProcessMIDI() {
 
 	if ( info.playing ) 
 	{
-		if ( !StatesSend && StartStateOn )   // Send initial state
+		startPresetEdit = 0;
+		if ( GetParameter(7) === 1 )
+		{
+			SetParameter(7, 0);
+		}
+		if ( GetParameter(11) === 1 )
+		{
+			SetParameter(11, 0);
+		}
+		if ( !StatesSend && startPreset )   // Send initial state
 		{
 			
 			// load Start State from Memory
 			SoloStateTrigger = SoloStateStartMemory;
-			
-			refresh = true; 
-			
+
 			prepareMIDIupdate( SoloStateTrigger ^ flipMask  ).then((result) => { // last masking to revert value back to what M:S/M:C needs
 					// ...and send them when they are ready to...
 					sendSolosStateToMs( result );
@@ -734,79 +540,259 @@ function ProcessMIDI() {
 	else
 	{
 		isPlaying = false;
-		StartStateOn ? StatesSend = false : StatesSend = true;
+		StatesSend = false;
 	}
 
+}	
+
+// Update settings from module UI or via CC
+function ParameterChanged( pParamNumber, pValue ) 
+{
+	if ( !refreshPatternMenu && !refreshPlayMenu && ( pValue !== lastSavedValues[pParamNumber] ) ) 
+	{
+
+		var nop = false;
+
+		switch ( pParamNumber )
+		{
+			case 0: 								// SOLO mode selector
+					
+					lastSavedValues[pParamNumber] = pValue;
+
+					switch ( pValue )
+					{
+						case 0 :
+								soloMode = 0;
+							break;
+	
+						case 1 :
+							soloMode = 1;
+							SoloStateTrigger = 0b000000;  // ensure we don't get some résiduel solos from stacked mode
+							SoloStateMemory = 0b000000;
+							break;
+	
+						case 2 :
+							soloMode = 2;
+							break;			
+			   	 }
+			    break;	
+	
+			case 2: 						// SOLO mode selector CC number
+				lastSavedValues[pParamNumber] = pValue;
+				settingsCC = pValue;
+				nop = true;
+				break;
+
+			case 3: 						// SOLO mode selector CC channel
+				lastSavedValues[pParamNumber] = pValue;
+				settingsCCchannel = pValue;
+				nop = true;
+				break;
+	
+			case 4: 						// toggle sendSettingsCCtoMS on/off
+				lastSavedValues[pParamNumber] = pValue;
+				pValue === 1 ? sendSettingsCCtoMS = true : sendSettingsCCtoMS = false;
+				break;
+	
+			case 6:
+				nop = true;
+				if ( !isPlaying ) 
+				{
+					SetStartStates(pParamNumber, pValue);
+				}
+				break;
+
+			case 7: 				//  ------------ 7 EDIT CHECKBOX
+				nop = true;
+				lastSavedValues[pParamNumber] = pValue;
+				switch ( pValue )
+				{
+					case 0:
+						startPresetEdit = 0;
+						break;
+	
+					case 1:
+						startPresetEdit = 1;
+						SetStartStates(pParamNumber, pValue);
+						break;
+				}
+				break;
+
+			case 10: 									//  ------ 10 Lock On Pattern
+				if ( !isPlaying && startPresetEdit === 1 && !deletePatternPreset ) 
+				{
+					programChangeMemory[ pValue - 1 ] = SoloStateStartMemory;
+	
+					SetStartStates(pParamNumber, pValue);
+				}
+				else if ( !isPlaying && deletePatternPreset && startPresetEdit === 1 ) 
+				{
+					programChangeMemory[ pValue - 1 ] = false;
+	
+					SetStartStates(pParamNumber, pValue);
+				}
+				nop = true;
+				break;
+
+			case 11:  				//  ------------ 11 delete Lock On Pattern
+				lastSavedValues[pParamNumber] = pValue;
+				if ( !isPlaying && startPresetEdit === 1 ) 
+				{
+					if ( pValue === 1 )
+					{
+						deletePatternPreset = true;
+					}
+					else
+					{
+						deletePatternPreset = false;
+					}
+					nop = true;
+					break;
+				}
+			default:
+				lastSavedValues[pParamNumber] = pValue;
+			   nop = true;
+			   break;
+		}
+	
+
+		if ( !nop && ( pParamNumber === 0 ) && sendSettingsCCtoMS ) // Call from UI, must update M:S CC
+		{	
+		 	var settingsCcValue = pValue;
+	
+		 	if ( reScaleSettingsCCvalues === true )
+			{
+	
+				settingsCcValue = settingsCcValue.ScaleValue(0, 3, reScaleMin, reScaleMax);
+				// when CC value step down to the range resp. to the lower value, it jump to the lowest value of this range
+				// so when it happen we add (reScaleMax / 3)- 1
+				if ( settingsCcValue <= ( ( GetParameter(pParamNumber) + ( reScaleMax - reScaleMin ) / 3 ) ) ) 
+				{
+					settingsCcValue += ( ( ( reScaleMax - reScaleMin ) / 3 ) - ( Math.floor( ( ( ( reScaleMax - reScaleMin ) / 3 ) / 2 ) ) ) );
+				}
+	
+			}
+		 			
+		 	if ( settingsCC === 104 ) 
+		 	{
+		 	
+		 		settingsCcValue += 64;  // remap value if the "FADE" setting of LFO Setup menu of Track 1 on the M:S/M:C
+		 			
+		 	}
+		 			
+		 	var outGoingCC = new ControlChange();
+		 	outGoingCC.channel = settingsCCchannel;
+		 	outGoingCC.number = settingsCC;
+		 	outGoingCC.value = settingsCcValue;
+		 	outGoingCC.send();
+		}
+	}
+	else 
+	{
+		refreshPatternMenu = false;
+		refreshPlayMenu = false;
+	}
 }
 
 
-// Set the initial state of the mute mode and the status for each track
+
+
+
+// Set the initial state of the mute for each track
 function SetStartStates( param, value )
 {
 
-	if ( !isPlaying  )
+	var midiSend = false;
+	if ( !refreshPlayMenu && !refreshPatternMenu)
 	{
 		
 		switch( param )
 				{
 					case 6:
-						
 						switch( value )
 						{
 							case 0:
-								startPreset = false;
-								SoloStateTrigger = 0b111111;
-								SetParameter( 20, 0 );
+								if ( value !== lastSavedValues[param] )
+								{
+									lastSavedValues[param] = value;
+									startPreset = false;
+									SoloStateTrigger = SoloStateMemory;
+								}
+								else
+								{
+									refreshPlayMenu = false;
+								}
 								break;
-
+		
 							case 1:
-								startPreset = true;
-								SoloStateTrigger = SoloStateStartMemory;
-
+								if ( value !== lastSavedValues[param] )
+								{
+									lastSavedValues[param] = value;
+									startPreset = true;
+									SoloStateTrigger = SoloStateStartMemory;
+								}
+								else
+								{
+									refreshPlayMenu = false;
+								}
+								
 								break;
 
 							default:
 								break;
 
 						}
-						refreshTracksUIBtns = true;
-						modeSelect = true;
-						
-	    				newStartMode = true;
-				    	break;				
+				    	break;
 
-					case 7:
-					case 8:
-					case 9:
-					case 10:
-					case 11:
-					case 12:
-						if ( !startPreset )
+				   case 7:
+						if ( startPreset )
 						{
-								modeSelect = true;
-								SoloStateTrigger = 0b111111;
-
-
-	    						newStartMode = true;
-								StartStateOn = false;
+							SoloStateTrigger = SoloStateStartMemory;
 						}
-						else 
-						{
-								SoloStateTrigger = SoloStateStartMemory;									
-								SoloStateTrigger = SoloStateTrigger ^ ( 1 << ( param - 7 ) );
-								// save
-								SoloStateStartMemory = SoloStateTrigger;
-								StartStateOn = true;
-								newStartMode = true;
-						}
-						
 						//Update GUI
-						refreshTracksUIBtns = true;
-
+						startPresetMenuString = "     ";
+						for ( var loop = 1; loop <= 6; loop++ )
+						{
+							startPresetMenuString += bitExtracted(SoloStateTrigger, loop) === 1 ? "⬜️   " : "🔳   ";
+						}
+				   	midiSend = true;
+						refreshPlayMenu = true;
+						PluginParameters = builPluginParameters();
+						UpdatePluginParameters();	
 						break;
 
-					case 20:
-						if ( !refreshPatternMenu && value !== lastProgramChangeMemory )
+					case 21:  // come from midi mute events, not GUI
+					case 22:
+					case 23:
+					case 24:
+					case 25:
+					case 26:
+						if ( !refreshPlayMenu && ( startPresetEdit === 1 ) &&  !isPlaying )
+						{
+							SoloStateTrigger = SoloStateTrigger ^ ( 1 << ( param - 21 ) );
+							SoloStateStartMemory = SoloStateTrigger;
+							//Update GUI
+							startPresetMenuString = "     ";
+							for ( var loop = 1; loop <= 6; loop++ )
+							{
+								startPresetMenuString += bitExtracted(SoloStateTrigger, loop) === 1 ? "⬜️   " : "🔳   ";
+							}
+							 
+							refreshPlayMenu = true;
+							PluginParameters = builPluginParameters();
+							UpdatePluginParameters();
+							refreshPatternMenu = false;
+						 	refreshPlayMenu = false;	
+							
+						}
+						else
+						{
+							refreshPlayMenu = false;
+						}
+						break;
+
+					case 10: 					//  ------ 10 Lock On Pattern
+						if ( !refreshPatternMenu && !isPlaying )
 						{
 							programChangeMemoryName[0] = "Select...";
 	
@@ -814,36 +800,26 @@ function SetStartStates( param, value )
 							{
 								for ( var i = 0; i <= 15; i++ )
 								{
-									var k = bankArray[ o - 1 ] + " - P " + (i + 1);       
-									if ( programChangeMemory[ i + ( (o - 1) * 16 ) ] !== false )    // special char : ⚈ ⚆
-									{																					 // ☀︎ ☼  ⊙ ⊙  ☒ ☐  ◉ 
-										k += "  ";															       // ● ◯ ◯  ◉ ◯
-										bitExtracted(programChangeMemory[ i + ( (o - 1) * 16 ) ], 1) === 1 ? k += "⬜️  " : k += "🔳  ";
-										bitExtracted(programChangeMemory[ i + ( (o - 1) * 16 ) ], 2) === 1 ? k += "⬜️  " : k += "🔳  ";
-										bitExtracted(programChangeMemory[ i + ( (o - 1) * 16 ) ], 3) === 1 ? k += "⬜️  " : k += "🔳  ";
-										bitExtracted(programChangeMemory[ i + ( (o - 1) * 16 ) ], 4) === 1 ? k += "⬜️  " : k += "🔳  ";
-										bitExtracted(programChangeMemory[ i + ( (o - 1) * 16 ) ], 5) === 1 ? k += "⬜️  " : k += "🔳  ";
-										bitExtracted(programChangeMemory[ i + ( (o - 1) * 16 ) ], 6) === 1 ? k += "⬜️  " : k += "🔳  ";
+									var k = bankArray[ o - 1 ] + " - P " + (i + 1);
+									var idxx = i + ( (o - 1) * 16 );    
+									if ( programChangeMemory[ idxx ] !== false )    // cosmetic: special char suitable : ⚈ ⚆
+									{																// ☀︎ ☼  ⊙ ⊙  ☒ ☐  ◉ 
+										k += "  ";												// ● ◯ ◯  ◉ ◯
+										for ( var loop = 1; loop <= 6; loop++ )
+										{
+											bitExtracted(programChangeMemory[ idxx ], loop) === 1 ? k += "⬜️  " : k += "🔳  ";
+										}
 									} 
-									programChangeMemoryName[(i + ( o * 16 )) + 1] = k;								}
+									programChangeMemoryName[(i + ( o * 16 )) + 1] = k;								
+								}
 							}
 							
 							lastProgramChangeMemory = value;
-							// PluginParameters[20] = {
- 						// 		name:"Lock On Pattern",   //  ------ 20
- 						// 		type:"menu",
- 						// 		valueStrings:programChangeMemoryName,
- 						// 		defaultValue:value,
- 						// 		minValue:0, 
- 						// 		maxValue:96,
- 						// 		hidden: false,
- 						// 		disableAutomation: false,
-							// 	readOnly: false	
-							// }
-							
-							// UpdatePluginParameters();			
-							// ParameterChanged( 0, 2 );
 							refreshPatternMenu = true;
+							PluginParameters = builPluginParameters();
+							UpdatePluginParameters();
+							refreshPatternMenu = false;
+						 	refreshPlayMenu = false;
 
 						}
 						else
@@ -856,67 +832,53 @@ function SetStartStates( param, value )
 					break;		
 				}
 
-	}
-
-		if ( newStartMode  )  // Update M:S 
-	{
-		//Trace("SoloStateTrigger  prepareMIDIupdateMute : " + SoloStateTrigger );
-		prepareMIDIupdate( SoloStateTrigger ^ flipMask  ).then((result) => { // last masking to revert value back to what M:S/M:C needs
+		if ( midiSend )
+		{
+			// Trace(" midiSend ");
+			prepareMIDIupdate( SoloStateTrigger ^ flipMask  ).then((result) => { 
 						// ...and send them when they are ready to...
 						sendSolosStateToMs( result );
 						
-							StartStateOn = true;
-							modeSelect = false;
-							newStartMode = false;
-							
-						});			
+							midiSend = false;
+						});
+		}
+
 	}
+
 }
 
 // triggered when scripter have nothing else to do
 function Idle() 
 {
-		if ( refresh || refreshPatternMenu )
-		{
-			PluginParameters = builPluginParameters();
-			UpdatePluginParameters();			
-			refresh = false;
-			//refreshPatternMenu = false;
-			
-		}
-
-		if ( refreshTracksUIBtns )
-		{
-			//Update GUI
-			SetParameter( 7, bitExtracted( SoloStateTrigger, 1 ) === 1 ? 1 : 0 );
-			SetParameter( 8, bitExtracted( SoloStateTrigger, 2 ) === 1 ? 1 : 0 );
-			SetParameter( 9, bitExtracted( SoloStateTrigger, 3 ) === 1 ? 1 : 0 );
-			SetParameter( 10, bitExtracted( SoloStateTrigger, 4 ) === 1 ? 1 : 0 );
-			SetParameter( 11, bitExtracted( SoloStateTrigger, 5 ) === 1 ? 1 : 0 );
-			SetParameter( 12, bitExtracted( SoloStateTrigger, 6 ) === 1 ? 1 : 0 );
-
-			refreshTracksUIBtns = false;
-		}
-
-		
-
 }	
-// triggered when scripter is loaded for the first time and when you switch to another MIDI module then switch to this one again
-// So, default (original) settings will be always recalled unless you use "save" option from the contextual menu of the 
-// module's GUI (the one at the top of the module GUI)
+
+// triggered when scripter is loaded for the first time
 function Initialize() 
 {	
+	if ( programChangeMemory.length === 0 )
+	{
+		programChangeMemoryName[0] = "Select...";
+		for ( var o  =  1; o <= bankArray.length; o++ )
+		{
+			for ( var i = 0; i <= 15; i++ )
+			{
+				var k = bankArray[ o - 1 ] + " - P " + (i + 1); 
+				programChangeMemory[ i + ( (o - 1) * 16 ) ] = false;
+				programChangeMemoryName[(i + ( o * 16 )) + 1] = k;
+			}
+		}
+	}
+	
 	// ensure that user-editable variables value are valid
 	reScaleMin = MIDI.normalizeData( reScaleMin );
 	reScaleMax = MIDI.normalizeData( reScaleMax );
 	settingsCC = MIDI.normalizeData( settingsCC );
 	settingsCCchannel = MIDI.normalizeChannel( settingsCCchannel );
-
 }	
 
 
-// this function loop-send incoming settings CC value if limitEncoderRange flag is set to true and the value is below or above the 
-// accepted range
+// this function loop-send incoming settings CC value if limitEncoderRange flag is set
+// to true and the value is below or above the accepted range
 function limitEncoder( event )
 {
 	event.send();
@@ -927,7 +889,6 @@ function sendSolosStateToMs( allChannelCCpack )
 {
 	allChannelCCpack.forEach(function (cc) 
 	{
-		// Trace("SOLO OUT : " + cc + "  solomode :" + soloMode + "  solomodeStart :" + soloModeStart); // debug SOLO's MIDI output
 		cc.send(); 
 	});
 }
@@ -992,8 +953,3 @@ function numToString(num, radix, length = num.length) {
     numString :
     padStart(numString, length - numString.length, "0")
 }
-
-
-
-//could be usefull to sniff object's properties
-// Trace(JSON.stringify(ObjectToAnalyze, null, 4))
