@@ -14,13 +14,16 @@
 /*												                                                                   
 /*   TOGGLING MODE is the most intuitive, but STACKED one could allow more creative patterns transitions...        	
 /*	
+/*		You can switch from one mode to another from the M:S/M:C using the FADE parameter of Track 1 (LFO Setup page),
+/*		or configure any other CC to do so.
+/*
 /*	The module also allow to set mute states per pattern, so a pre-configured tracks mute setup is recalled as
 /*	you change pattern on the M:S/M:C :
 /*  - Toggle EDIT mode using the EDIT checkbox (playing should be stopped).
 /*  - Set your mute config using the M:S/M:C track's pads.
 /*	- Use the 'Lock	On Pattern' selector to pick up the pattern you want to assign the config to. Select more patterns
 /*	if needed, changing or not the mute states.
-/* 	- To delete a settled config, check the DELETE checkbox and use the same 'Lock	On Pattern' selector.
+/* 	- To delete a settled config, check the DELETE checkbox and use the same 'Lock On Pattern' selector.
 /*	
 /*	- Hint : Patterns you want to assign a config to can also be selected directly from M:S/M:C UI, simply pressing
 /*	twice the STOP button or selecting patterns with PATTERN button. To delete a config from M:S/M:C UI, select again
