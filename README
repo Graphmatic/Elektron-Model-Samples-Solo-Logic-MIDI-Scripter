@@ -6,7 +6,7 @@
 
   - TWO MODES ARE AVAILABLE :
 
-	- STACKED : multiple tracks can be SOLOed at the same time.	 A track stay SOLOed
+	- STACKED : multiple tracks can be SOLOed at the same time. A track stay SOLOed
 	  until you press the resp. track again. The module keep memory of the previously
 	  SOLOed tracks, so after un-SOLOing a SOLOed track, all previously SOLOed tracks
 	  remain SOLOed until you press them back again.
