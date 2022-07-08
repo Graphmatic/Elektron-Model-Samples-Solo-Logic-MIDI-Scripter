@@ -1,7 +1,5 @@
 /************************************NOPS©**********************************************************/
-			                                                                                                       	
-  THIS SCRIPTER MODULE ALLOWS TO USE THE MUTE FUNCTION OF MODEL:SAMPLES & MODEL:CYCLES AS A SOLO
-  FUNCTION
+THIS SCRIPTER MODULE ALLOWS TO USE THE MUTES OF MODEL:SAMPLES & MODEL:CYCLES AS A SOLO FUNCTION
 
   - TWO MODES ARE AVAILABLE :
 
@@ -53,8 +51,8 @@
 	MIDI port with  'MIDI THRU' option active. Also the MIDI USB port is pretty faster than DIN
 	MIDI, and as the MUTE events loop from and to the M:S and DAW, maybe delay will be
 	perceptible with DIN MIDI...
-			                                                                                                       	
-			                     HOW TO USE
+
+			HOW TO USE
 
 	On the Model:Samples/Cycles:
 	-  All tracks have to be set to MIDI Channel 1 to 6, and have MIDI Out activated in TRK Menu
@@ -62,7 +60,7 @@
 	in Audio configuration menu of the Elektron device, set the 'Int Out' parameter either on
 	'AUTO' or 'OFF'
 	-  Logic must send MIDI Clock (Settings/Synchronisation/MIDI --> check "Clock" AND "MMC")
-                                                                                                    	
+
 	To simply play Live, load the 'MODEL-SAMPLE_LIVE_MAIN OUT RECORD' template project available
 	in the Git repository. Be sure that your Elektron device is connected with USB before loading
 	the project so you would not have any routing configuration to do. If your device setup is
