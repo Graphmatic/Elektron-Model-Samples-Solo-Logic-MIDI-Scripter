@@ -6,15 +6,15 @@
 
   - TWO MODES ARE AVAILABLE :
 
-				- STACKED : multiple tracks can be SOLOed at the same time.	 A track stay SOLOed
-				  until you press the resp. track again. The module keep memory of the previously
-				  SOLOed tracks, so after un-SOLOing a SOLOed track, all previously SOLOed tracks
-				  remain SOLOed until you press them back again.
+	- STACKED : multiple tracks can be SOLOed at the same time.	 A track stay SOLOed
+	  until you press the resp. track again. The module keep memory of the previously
+	  SOLOed tracks, so after un-SOLOing a SOLOed track, all previously SOLOed tracks
+	  remain SOLOed until you press them back again.
 
-				  Note: if all the 6 tracks are SOLOed, then SOLO status is removed for the 6 tracks.
+	  Note: if all the 6 tracks are SOLOed, then SOLO status is removed for the 6 tracks.
 
-				- TOGGLING MODE : (radio button) only one track can be SOLOed at the same time:
-				  SOLOing a track mutes all other, whatever was theirs previous states.
+	- TOGGLING MODE : (radio button) only one track can be SOLOed at the same time:
+	  SOLOing a track mutes all other, whatever was theirs previous states.
 	
 	TOGGLING MODE is the most intuitive, but STACKED one could allow more creative patterns
 	transitions...
