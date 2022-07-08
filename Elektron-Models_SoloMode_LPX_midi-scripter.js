@@ -3,7 +3,7 @@
 /*			                                                                                                       	
 /*  THIS SCRIPTER MODULE ALLOWS TO USE THE MUTE FUNCTION OF MODEL:SAMPLES & MODEL:CYCLES AS A SOLO FUNCTION        	
 /*			- TWO MODES ARE AVAILABLE :	                                                                          	
-/*										 - STACKED (default) : multiple tracks can be SOLOed at the same time.		
+/*										 - STACKED : multiple tracks can be SOLOed at the same time.		
 /*   A track stay SOLOed until you press the resp. track again. The module keep memory of the previously SOLOed    	
 /*  tracks, so after un-SOLOing a SOLOed track, all previously SOLOed tracks remain SOLOed until you press them back
 /*  again.  				                                                                                          
@@ -13,7 +13,30 @@
 /*  same time: SOLOing a track mutes all other, whatever was theirs previous states.                                
 /*												                                                                   
 /*   TOGGLING MODE is the most intuitive, but STACKED one could allow more creative patterns transitions...        	
-/*											
+/*	
+/*	The module also allow to set mute states per pattern, so a pre-configured tracks mute setup is recalled as
+/*	you change pattern on the M:S/M:C :
+/*  - Toggle EDIT mode using the EDIT checkbox (playing should be stopped).
+/*  - Set your mute config using the M:S/M:C track's pads.
+/*	- Use the 'Lock	On Pattern' selector to pick up the pattern you want to assign the config to. Select more patterns
+/*	if needed, changing or not the mute states.
+/* 	- To delete a settled config, check the DELETE checkbox and use the same 'Lock	On Pattern' selector.
+/*	
+/*	- Hint : Patterns you want to assign a config to can also be selected directly from M:S/M:C UI, simply pressing
+/*	twice the STOP button or selecting patterns with PATTERN button. To delete a config from M:S/M:C UI, select again
+/*	the target pattern.
+/*
+/*	'Lock On Play' set to 'enabled' recall the mute config shown below each time you press Play from Logic.
+/*
+/*  Some additionnal settings are only editable from within the script itself, see in the header for the section
+/*	labelled  " USER EDITABLE VARIABLES that are not editable from module GUI ". Explanations are given in comments.
+/*	Check them as some of this setting may need to be edited to respond to your setup. If you edit the script,
+/*	don't forget to press the 'Run Script' button again.
+/*
+/*	LIMITATION: The Mute States per pattern won't be saved when you close the Logic project, and there is no way to do
+/*	so with the scripter, unfortunatly, unless using 3456 separate UI parameters...
+/*	Just wait for the C++ vst/au version ;-)
+/*
 /*	ONLY TESTED USING USB PORT OF MODEL:SAMPLES & MODEL:CYCLES - Strange things may occur using DIN MIDI port with  
 /*	'MIDI THRU' option active. Also the MIDI USB port is pretty faster than DIN MIDI, and as the MUTE events loop
 /*	from and to the M:S and DAW, maybe delay will be perceptible with DIN MIDI...				
@@ -23,6 +46,7 @@
 /*					-  All tracks have to be set to MIDI Channel 1 to 6, and have MIDI Out activated in TRK Menu
 /*					-  If you use Direct Monitoring on the Audio track that record the device audio output, in Audio 
 /*					   configuration menu of the Elektron device, set the 'Int Out' parameter either on 'AUTO' or 'OFF'
+/*					-  Logic must send MIDI Clock (Settings/Synchronisation/MIDI --> check "Clock" AND "MMC")
 /*                                                                                                    	
 /*	To simply play Live, load the 'MODEL-SAMPLE_LIVE_MAIN OUT RECORD' template project available in the Git 
 /*  repository. Be sure that your Elektron device is connected with USB before loading the project so you would not
@@ -30,10 +54,6 @@
 /*	of first track (M:S MIDI) and verify that MIDI Destination is set to the MIDI port you have connected your device to.
 /*	Then check that the track labelled M:S MASTER have its input set on the Audio Inputs you have connected your 
 /*	Electron device to.
-/*
-/*	To record MIDI separatly for the 6 tracks and the main out on an audio track, load the project named 
-/*	'MODEL-SAMPLE_MIDI_MULTITRACK'. Arm record for all tracks and ensure that one of the 'M:S MIDI x' track is currently 
-/*	selected while you press RECORD button (if not, the MIDI tracks won't record anything, what a crappy behaviour..).
 /*	                                                                         
 /*******************************************************NOPS©**********************************************************/
 
