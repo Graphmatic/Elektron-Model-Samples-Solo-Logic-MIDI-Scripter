@@ -476,7 +476,8 @@ function HandleMIDI(event)
               ...unless the track was previously on Solo
             */
 
-            if ( ( event.value === 1 ) && ( bitExtracted( SoloStateMemory, ( MidiChannel + 1 ) ) === 1 ) && ( soloMode === 2 ) ) // re-press on a (the) currently solo-ed track
+            if ( ( event.value === 1 ) && ( bitExtracted( SoloStateMemory, ( MidiChannel + 1 ) ) === 1 ) && ( soloMode === 2 ) ) 
+            // re-press on a (the) currently solo-ed track
             {
                 
                 SoloStateTrigger = SoloStateMemory;
@@ -492,8 +493,9 @@ function HandleMIDI(event)
 
             }
             
-            else // it's a press on a currently muted track or on any track if none are currently solo-ed
-                 // or it's Radio Mode
+            else 
+            // it's a press on a currently muted track or on any track if none are currently solo-ed
+            // or it's Radio Mode
             {
                 if ( ( soloMode === 1 ) && ( event.value === 1 ) ) // we simply toggle the resp. bit 
                 {
@@ -521,9 +523,9 @@ function HandleMIDI(event)
         }
         
         // prepare CC's datas...
-        prepareMIDIupdate( SoloStateTrigger ^ flipMask  ).then((result) => { // last masking to revert value back 
-            // to what M:S/M:C needs
-            // ...and send them when they are ready to...
+        // last masking to revert value back to what M:S/M:C needs
+        // ...and send them when they are ready to...
+        prepareMIDIupdate( SoloStateTrigger ^ flipMask  ).then((result) => { 
             sendSolosStateToMs( result );
             
             // ...well :-), it's time to save the current SOLOs states to local memory
