@@ -19,6 +19,13 @@ THIS SCRIPTER MODULE ALLOWS TO USE THE MUTES OF MODEL:SAMPLES & MODEL:CYCLES AS 
   You can switch from one mode to another from the M:S/M:C using the FADE parameter of Track 1
   (LFO Setup page), or configure any other CC to do so.
 
+  NEW: A "double tap SOLO mode have been added", it allow to trig SOLO pressing twice quickly a
+  mute PAD (do a normal MUTE but pressing twice). Better using this mode with the "Toggling" mode,
+  as it can be confusing when using it with "Stacked" mode (even if it work as expected).
+  A radio button have been added to activate this mode. You can set in the headers of the script
+  the max delay between two tap, in millisecond. This mode is really better and make a lot of 
+  current options pretty useless, so I will produce a simplified of the script ASAP.
+
   The module also allow to set mute states per pattern, so a pre-configured tracks mute setup is
   recalled as you change pattern on the M:S/M:C :
 
