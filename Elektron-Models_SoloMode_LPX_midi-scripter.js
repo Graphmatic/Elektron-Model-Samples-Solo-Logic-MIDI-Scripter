@@ -95,6 +95,9 @@
     
     var deletePatternPreset = false;
 
+    var firstTimeTap = 0;
+    var firstTimeTapChannel = 0;
+
     //////////////////////////////// ⬇︎⬇︎⬇︎  - USER EDITABLE VARIABLES - ⬇︎⬇︎⬇︎//////////////////////////////////
  
                             /* USER EDITABLE VARIABLES editable from module GUI */
@@ -117,6 +120,8 @@
                                               // the controler you use) settingsCC value changes, so local tweaks are 
                                               // reflected to M:S/M:C too.       
                                               // The "settingsCCchannel" value will be used as MIDI channel.
+
+    var doubleTap = true;                     // Trig SOLO using a quick double press
 
                         
                         /* USER EDITABLE VARIABLES that are not editable from module GUI */
@@ -146,6 +151,9 @@
                                               // change
     var listenProgramChangeOnlyPlay = true;   // Ignore Program change if not currently playing
     var programChangeChannel = 1;             // Edit to matche M:S/M:C setup
+
+    var doubleTapMaxDelay = 250;              // Maximum delay in millisecond between two tap when SOLO is triggered
+                                              // using a double pad stroke
     
     ////////////////////////////  ⬆︎⬆︎⬆︎ - USER EDITABLE VARIABLES - ⬆︎⬆︎⬆︎ //////////////////////////////////
 
@@ -197,10 +205,10 @@ function builPluginParameters()
             data: 14
         },
         {
-        name: "CC out",         //  ------------ 4
-        type: "checkbox",
-        defaultValue: sendSettingsCCtoMS === true ? 1 : 0,
-        disableAutomation: false,
+            name: "CC out",         //  ------------ 4
+            type: "checkbox",
+            defaultValue: sendSettingsCCtoMS === true ? 1 : 0,
+            disableAutomation: false,
             readOnly: false
         },
         {
@@ -222,9 +230,9 @@ function builPluginParameters()
         },
         {
             name: "Edit",           //  ------------ 7 EDIT CHECKBOX
-        type: "checkbox",
-        defaultValue: startPresetEdit,
-        disableAutomation: true,
+            type: "checkbox",
+            defaultValue: startPresetEdit,
+            disableAutomation: true,
             readOnly: false
         },
         {
@@ -252,17 +260,25 @@ function builPluginParameters()
         },
         {
             name: "Delete",         //  ------------ 11 delete Lock On Pattern
-        type: "checkbox",
-        defaultValue: deletePatternPreset === true ? 1 : 0,
-        disableAutomation: true,
+            type: "checkbox",
+            defaultValue: deletePatternPreset === true ? 1 : 0,
+            disableAutomation: true,
             readOnly: false
         },
         {
-            name:"Info & add. settings: see script header",  //  ------------ 12
+            name: "Double Tap Solo",         //  ------------ 12 Enable Double Tap SOLO
+            type: "checkbox",
+            defaultValue: doubleTap === true ? 1 : 0,
+            disableAutomation: true,
+            readOnly: false
+        },
+        {
+            name:"Info & add. settings: see script header",  //  ------------ 13
             type:"text",
             disableAutomation: true,
             readOnly: true
-        }
+        },
+        
 
     ];
 
@@ -430,7 +446,7 @@ function HandleMIDI(event)
 
     // M:S is not playing and Edit is checked for start preset == Pads are used to configure the 
     // initial states of Mutes/Solos
-    if (  ( !isPlaying ) && ( startPresetEdit === 1 ) && ( event instanceof ControlChange && event.number == muteCCnumber ) )
+    if (  ( !isPlaying ) && ( startPresetEdit === 1 ) && ( event instanceof ControlChange && event.number === muteCCnumber ) )
     {
         if ( event.value > 1 ) 
         {
@@ -443,10 +459,45 @@ function HandleMIDI(event)
     }
 
     // it's a Mute event and Solo is On
-    if ( ( event instanceof ControlChange && event.number == muteCCnumber ) && ( soloMode !== 0 ) && ( startPresetEdit === 0 ) )
+    if ( ( event instanceof ControlChange && event.number === muteCCnumber ) && ( soloMode !== 0 ) && ( startPresetEdit === 0 ) )
     { 
         // remap MIDI channel value to address correctly zero-starting arrays.
         var MidiChannel = event.channel - 1;
+
+        /* check if we are in Double Tap soloing mode, if yes mesure time gap to catch solo "double tap" */
+        if ( doubleTap )
+        {
+            // Get the current time in milliseconds
+            now = new Date().getTime();
+            Trace( now + " : tap   1" );
+
+            // is a first Tap registered for this track?
+            if ( ( firstTimeTap !== 0 ) && ( MidiChannel === firstTimeTapChannel ) )
+            {
+                
+
+                // calculate time passed between the two taps
+                if ( ( now - firstTimeTap ) > doubleTapMaxDelay ) // it's not a double tap
+                { 
+                    //we do nothing, it's just a Mute event so
+                    Trace( now + " : second tap out of time" );
+                    firstTimeTap = now;
+                    firstTimeTapChannel = MidiChannel;
+                    return;
+                }
+                Trace( now + " : second tap in time" );
+                event.value = 1;
+                firstTimeTap = 0;
+
+            }
+            else // we register the stroke as the first tape
+            {
+                firstTimeTap = now;
+                firstTimeTapChannel = MidiChannel;
+                return;
+            }
+
+        }
         
         /* 
            if it's the first time a Mute/Solo key is pressed after activating the SOLO mode, the resp. track
@@ -522,6 +573,9 @@ function HandleMIDI(event)
             
         }
         
+        // reset doubleTap helper
+        firstTimeTap = 0;
+
         // prepare CC's datas...
         // last masking to revert value back to what M:S/M:C needs
         // ...and send them when they are ready to...
@@ -684,6 +738,13 @@ function ParameterChanged( pParamNumber, pValue )
                     nop = true;
                     break;
                 }
+
+            case 12:  //   Toggle Double Tap SOLO on/off
+                lastSavedValues[pParamNumber] = pValue;
+                ( pValue === 1 ) ? doubleTap = true : doubleTap = false;
+                nop = true;
+                break;
+
             default:
                 lastSavedValues[pParamNumber] = pValue;
                nop = true;
