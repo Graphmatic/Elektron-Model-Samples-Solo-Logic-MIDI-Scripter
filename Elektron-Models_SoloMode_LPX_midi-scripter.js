@@ -65,7 +65,7 @@
     var SoloStateTrigger = 0b000000;            // the local var used to update M:S/M:C
     var SoloStateStartMemory = 0b000000;
     var startPreset = false;
-    var logical = new Array(1,2,4,8,16,32);     // an helper array to toggle the resp. bits of SoloState
+    const logical = new Array(1,2,4,8,16,32);     // an helper array to toggle the resp. bits of SoloState
     var isInit = true;                          // an helper boolean to detect the first key-press after Solo mode 
                                                 // activation
     var muteCCnumber = 94;                      // the CC that triger MUTE on M:S / M:C
@@ -74,7 +74,6 @@
     var refreshTracksUIBtns = false;
     var toggleMatrix = [ 0b111111, 0b000001, 0b000010, 0b000100, 0b001000, 0b010000, 0b100000];
     var refreshPatternMenu = false;
-    var startPresetMenuString = "";
     var lastSavedValues = [];
     var refreshPlayMenu = false;
     var startPresetMenuString = "    ";
@@ -469,7 +468,8 @@ function HandleMIDI(event)
         {
             // Get the current time in milliseconds
             now = new Date().getTime();
-            Trace( now + " : tap   1" );
+            
+            /* Trace( now + " : tap   1" ); */
 
             // is a first Tap registered for this track?
             if ( ( firstTimeTap !== 0 ) && ( MidiChannel === firstTimeTapChannel ) )
@@ -480,12 +480,12 @@ function HandleMIDI(event)
                 if ( ( now - firstTimeTap ) > doubleTapMaxDelay ) // it's not a double tap
                 { 
                     //we do nothing, it's just a Mute event so
-                    Trace( now + " : second tap out of time" );
+                    /* Trace( now + " : second tap out of time" ); */
                     firstTimeTap = now;
                     firstTimeTapChannel = MidiChannel;
                     return;
                 }
-                Trace( now + " : second tap in time" );
+                /* Trace( now + " : second tap in time" ); */
                 event.value = 1;
                 firstTimeTap = 0;
 
